@@ -1,0 +1,93 @@
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///crm.db'
+app.config['SECRET_KEY'] = 'secretkey'
+db = SQLAlchemy(app)
+
+# Define a Customer model
+class Customer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    phone = db.Column(db.String(20))
+    company = db.Column(db.String(100))
+    notes = db.Column(db.Text)
+
+    def __repr__(self):
+        return f'<Customer {self.name}>'
+
+# Home route to show all customers
+@app.route('/')
+def index():
+    customers = Customer.query.all()
+    return render_template('index.html', customers=customers)
+
+# Route to add a new customer
+@app.route('/add', methods=['POST', 'GET'])
+def add_customer():
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        phone = request.form['phone']
+        company = request.form['company']
+        notes = request.form['notes']
+
+        new_customer = Customer(name=name, email=email, phone=phone, company=company, notes=notes)
+
+        try:
+            db.session.add(new_customer)
+            db.session.commit()
+            flash("Customer added successfully!", "success")
+            return redirect(url_for('index'))
+        except:
+            flash("There was an issue adding the customer", "danger")
+            return redirect(url_for('index'))
+    else:
+        return render_template('add_customer.html')
+
+# Route to update an existing customer
+@app.route('/update/<int:id>', methods=['GET', 'POST'])
+def update_customer(id):
+    customer = Customer.query.get_or_404(id)
+    if request.method == 'POST':
+        customer.name = request.form['name']
+        customer.email = request.form['email']
+        customer.phone = request.form['phone']
+        customer.company = request.form['company']
+        customer.notes = request.form['notes']
+
+        try:
+            db.session.commit()
+            flash("Customer updated successfully!", "success")
+            return redirect(url_for('index'))
+        except:
+            flash("There was an issue updating the customer", "danger")
+            return redirect(url_for('index'))
+    else:
+        return render_template('update_customer.html', customer=customer)
+
+# Route to delete a customer
+@app.route('/delete/<int:id>')
+def delete_customer(id):
+    customer = Customer.query.get_or_404(id)
+
+    try:
+        db.session.delete(customer)
+        db.session.commit()
+        flash("Customer deleted successfully!", "success")
+        return redirect(url_for('index'))
+    except:
+        flash("There was an issue deleting the customer", "danger")
+        return redirect(url_for('index'))
+
+# Analytics and Reports (example route)
+@app.route('/analytics')
+def analytics():
+    total_customers = Customer.query.count()
+    return render_template('analytics.html', total_customers=total_customers)
+
+if __name__ == "__main__":
+    db.create_all()  # Initializes the database
+    app.run(debug=True)
