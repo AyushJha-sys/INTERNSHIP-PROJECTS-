@@ -1,0 +1,87 @@
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///contacts.db'
+app.config['SECRET_KEY'] = 'secretkey'
+db = SQLAlchemy(app)
+
+# Define a Contact model
+class Contact(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    phone = db.Column(db.String(20), nullable=False)
+    address = db.Column(db.String(200))
+    notes = db.Column(db.Text)
+
+    def __repr__(self):
+        return f'<Contact {self.name}>'
+
+# Home route to show all contacts
+@app.route('/')
+def index():
+    contacts = Contact.query.all()
+    return render_template('index.html', contacts=contacts)
+
+# Route to add a new contact
+@app.route('/add', methods=['POST', 'GET'])
+def add_contact():
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        phone = request.form['phone']
+        address = request.form['address']
+        notes = request.form['notes']
+
+        new_contact = Contact(name=name, email=email, phone=phone, address=address, notes=notes)
+
+        try:
+            db.session.add(new_contact)
+            db.session.commit()
+            flash("Contact added successfully!", "success")
+            return redirect(url_for('index'))
+        except:
+            flash("There was an issue adding the contact", "danger")
+            return redirect(url_for('index'))
+    else:
+        return render_template('add_contact.html')
+
+# Route to update an existing contact
+@app.route('/update/<int:id>', methods=['GET', 'POST'])
+def update_contact(id):
+    contact = Contact.query.get_or_404(id)
+    if request.method == 'POST':
+        contact.name = request.form['name']
+        contact.email = request.form['email']
+        contact.phone = request.form['phone']
+        contact.address = request.form['address']
+        contact.notes = request.form['notes']
+
+        try:
+            db.session.commit()
+            flash("Contact updated successfully!", "success")
+            return redirect(url_for('index'))
+        except:
+            flash("There was an issue updating the contact", "danger")
+            return redirect(url_for('index'))
+    else:
+        return render_template('update_contact.html', contact=contact)
+
+# Route to delete a contact
+@app.route('/delete/<int:id>')
+def delete_contact(id):
+    contact = Contact.query.get_or_404(id)
+
+    try:
+        db.session.delete(contact)
+        db.session.commit()
+        flash("Contact deleted successfully!", "success")
+        return redirect(url_for('index'))
+    except:
+        flash("There was an issue deleting the contact", "danger")
+        return redirect(url_for('index'))
+
+if __name__ == "__main__":
+    db.create_all()  # Initializes the database
+    app.run(debug=True)
