@@ -1,0 +1,86 @@
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///attendance.db'
+app.config['SECRET_KEY'] = 'secretkey'
+db = SQLAlchemy(app)
+
+# Employee Model
+class Employee(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    department = db.Column(db.String(100))
+
+    def __repr__(self):
+        return f'<Employee {self.name}>'
+
+# Attendance Model
+class Attendance(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
+    date = db.Column(db.Date, default=datetime.utcnow)
+    status = db.Column(db.String(10), nullable=False)  # Present, Absent, etc.
+
+    def __repr__(self):
+        return f'<Attendance {self.employee_id} {self.date} {self.status}>'
+
+# Home route to view employees and attendance records
+@app.route('/')
+def index():
+    employees = Employee.query.all()
+    attendance_records = Attendance.query.order_by(Attendance.date.desc()).all()
+    return render_template('index.html', employees=employees, attendance_records=attendance_records)
+
+# Route to add a new employee
+@app.route('/add_employee', methods=['POST', 'GET'])
+def add_employee():
+    if request.method == 'POST':
+        name = request.form['name']
+        department = request.form['department']
+
+        new_employee = Employee(name=name, department=department)
+
+        try:
+            db.session.add(new_employee)
+            db.session.commit()
+            flash("Employee added successfully!", "success")
+            return redirect(url_for('index'))
+        except:
+            flash("There was an issue adding the employee", "danger")
+            return redirect(url_for('index'))
+    else:
+        return render_template('add_employee.html')
+
+# Route to record attendance
+@app.route('/record_attendance', methods=['POST', 'GET'])
+def record_attendance():
+    employees = Employee.query.all()
+    if request.method == 'POST':
+        employee_id = request.form['employee_id']
+        status = request.form['status']
+
+        new_attendance = Attendance(employee_id=employee_id, status=status)
+
+        try:
+            db.session.add(new_attendance)
+            db.session.commit()
+            flash("Attendance recorded successfully!", "success")
+            return redirect(url_for('index'))
+        except:
+            flash("There was an issue recording attendance", "danger")
+            return redirect(url_for('index'))
+    else:
+        return render_template('record_attendance.html', employees=employees)
+
+# Route to view an employee's attendance report
+@app.route('/report/<int:employee_id>')
+def report(employee_id):
+    employee = Employee.query.get_or_404(employee_id)
+    attendance_records = Attendance.query.filter_by(employee_id=employee_id).order_by(Attendance.date.desc()).all()
+    return render_template('report.html', employee=employee, attendance_records=attendance_records)
+
+if __name__ == "__main__":
+    db.create_all()  # Initializes the database
+    app.run(debug=True)
